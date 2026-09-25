@@ -12,6 +12,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# 自动加载本地环境变量（.env 已在 .gitignore 中，用来放 API Key / 数据库密码）
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"
+  set +a
+fi
+
 if [[ -x ./gradlew ]]; then
   exec ./gradlew --console=plain bootRun "$@"
 fi

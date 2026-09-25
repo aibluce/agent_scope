@@ -22,11 +22,28 @@ from datetime import date, datetime, timedelta
 
 import pymysql
 
+def _load_dotenv(path=".env"):
+    """极简 .env 加载：KEY=VALUE 逐行读入环境变量（不覆盖已存在的）。"""
+    import os as _os
+    for candidate in (path, _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), ".env")):
+        if _os.path.isfile(candidate):
+            for line in open(candidate, encoding="utf-8"):
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                _os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            break
+
+
+_load_dotenv()
+
+
 DB = dict(
     host=os.getenv("T2SQL_DB_HOST", "127.0.0.1"),
     port=int(os.getenv("T2SQL_DB_PORT", "3306")),
     user=os.getenv("T2SQL_DB_USER", "root"),
-    password=os.getenv("T2SQL_DB_PASSWORD", "Atguigu.123"),
+    password=os.getenv("T2SQL_DB_PASSWORD", "root"),
     database=os.getenv("T2SQL_DB_NAME", "ecommerce"),
     charset="utf8mb4",
 )

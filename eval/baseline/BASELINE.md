@@ -2,7 +2,7 @@
 
 - 评估时间：2026-09-25 20:18:57
 - 被测接口：`http://127.0.0.1:8080/api/text2sql/generate`（模型 deepseek-flash）
-- 用例集：/Users/jounery/java_note/agent_scope/eval/dataset.jsonl（20 条）
+- 用例集：eval/dataset.jsonl（20 条）
 - 评估框架：RAGAS 0.4.3（自定义 SQL 指标）+ datacompy 结果集比对
 
 ## 总体指标

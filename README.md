@@ -78,8 +78,8 @@ controller/  →  service/  →  mapper/ (MyBatis-Plus)  →  MySQL
 ### 1. 准备数据库（5 张表 + 示例数据）
 
 ```bash
-# 默认连接 127.0.0.1:3306 root/Atguigu.123，可用环境变量覆盖
-MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_USER=root MYSQL_PASSWORD=Atguigu.123 \
+# 默认连接 127.0.0.1:3306 root/your_password，可用环境变量覆盖
+MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_USER=root MYSQL_PASSWORD=your_password \
     bash scripts/init-db.sh
 ```
 
@@ -100,7 +100,7 @@ spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/ecommerce?...
     username: root
-    password: Atguigu.123
+    password: your_password
     hikari:
       read-only: true          # 只读连接池：从连接层杜绝写操作
 mybatis-plus:

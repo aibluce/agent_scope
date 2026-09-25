@@ -13,7 +13,8 @@ import java.nio.file.Paths;
 public class FirstAgent {
     public static void main(String[] args) {
         OpenAIChatModel chatModel = OpenAIChatModel.builder().baseUrl("https://api.deepseek.com")
-                .apiKey("")
+                .apiKey(System.getenv().getOrDefault("DEEPSEEK_API_KEY",
+                        System.getenv().getOrDefault("T2SQL_LLM_API_KEY", "")))
                 .modelName("deepseek-flash").build();
         HarnessAgent agent = HarnessAgent.builder()
                 .name("note-taker")

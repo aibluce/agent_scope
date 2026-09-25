@@ -7,9 +7,15 @@
 # ============================================================================
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 自动加载本地环境变量（.env 已在 .gitignore 中，用来放数据库口令 / API Key）
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a; source "$ROOT_DIR/.env"; set +a
+fi
+
 MYSQL="${MYSQL_BIN:-/opt/anaconda3/bin/mysql}"
 MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"; MYSQL_PORT="${MYSQL_PORT:-3306}"
-MYSQL_USER="${MYSQL_USER:-root}"; MYSQL_PASSWORD="${MYSQL_PASSWORD:-Atguigu.123}"
+MYSQL_USER="${MYSQL_USER:-root}"; MYSQL_PASSWORD="${MYSQL_PASSWORD:-root}"
 
 mysql_args=(-h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD"
             --protocol=TCP --default-character-set=utf8mb4)

@@ -42,6 +42,11 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+### 本地环境变量（含密钥，切勿提交）###
+.env
+.env.local
+*.env
+
 ### Text2SQL 评估工具 ###
 eval/.venv/
 eval/reports/

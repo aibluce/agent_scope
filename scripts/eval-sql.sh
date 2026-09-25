@@ -10,6 +10,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 自动加载本地环境变量（.env 已在 .gitignore 中，用来放数据库口令 / API Key）
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a; source "$ROOT_DIR/.env"; set +a
+fi
+
 cd "$ROOT_DIR"
 
 VENV_PY="$ROOT_DIR/eval/.venv/bin/python"

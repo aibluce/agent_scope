@@ -15,8 +15,9 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://127.0.0.1:3306/ecommerce?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&zeroDateTimeBehavior=convertToNull
-    username: root
-    password: Atguigu.123
+    username: ${T2SQL_DB_USER:root}
+    # 本地开发请把密码放进 .env（已在 .gitignore 里），不要提交到仓库
+    password: ${T2SQL_DB_PASSWORD:root}
     hikari:
       pool-name: text2sql-pool
       maximum-pool-size: 8
@@ -45,8 +46,8 @@ t2sql:
     # 任何兼容 OpenAI 协议的服务：DeepSeek / 通义千问兼容模式 / vLLM / Ollama
     base-url: https://api.deepseek.com
     model: deepseek-flash
-    # 生产环境请改用环境变量 DEEPSEEK_API_KEY 或 T2SQL_LLM_API_KEY
-    api-key:
+    # 不要把 Key 写进仓库：用环境变量提供（T2SQL_LLM_API_KEY / DEEPSEEK_API_KEY / OPENAI_API_KEY）
+    api-key: ${T2SQL_LLM_API_KEY:}
   sql:
     max-rows: 200
     # 只允许查询这些表（安全网关的白名单）
