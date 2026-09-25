@@ -1,0 +1,103 @@
+plugins {
+    id("java")
+    id("org.springframework.boot") version "3.5.16"
+}
+
+group = "com.ll.agent"
+version = "1.0-SNAPSHOT"
+
+ext {
+    agentscopeVersion = "2.0.3"
+    springBootVersion = "3.5.16"
+    mybatisPlusVersion = "3.5.17"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // ---------------- Spring Boot / Spring MVC ----------------
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    // Lombok 走 annotationProcessor，需要把 BOM 也挂到这些 configuration 上（它们不继承 implementation）
+    compileOnly platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    annotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    testCompileOnly platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    testAnnotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    implementation "org.springframework.boot:spring-boot-starter-web"
+    implementation "org.springframework.boot:spring-boot-starter-validation"
+    // WebFlux 版对照实现（webflux 包，跑在 8081）：响应式 SSE
+    // 注意：两个 starter 同时存在时 Spring Boot 默认判定为 SERVLET，
+    //      WebFlux 版在启动类里显式 setWebApplicationType(REACTIVE)
+    implementation "org.springframework.boot:spring-boot-starter-webflux"
+
+    // ---------------- MyBatis-Plus ----------------
+    // spring-boot3 starter：自动装配 SqlSessionFactory / Mapper 扫描 / 分页等
+    implementation "com.baomidou:mybatis-plus-spring-boot3-starter:${mybatisPlusVersion}"
+    // 3.5.9 起 jsqlparser 拆成独立模块，分页插件（PaginationInnerInterceptor）依赖它
+    implementation "com.baomidou:mybatis-plus-jsqlparser:${mybatisPlusVersion}"
+    implementation "com.mysql:mysql-connector-j:8.3.0"
+
+    // ---------------- AgentScope（智能体推理） ----------------
+    implementation "io.agentscope:agentscope-harness:${agentscopeVersion}"
+    implementation "io.agentscope:agentscope-extensions-model-dashscope:${agentscopeVersion}"
+    implementation "io.agentscope:agentscope-extensions-model-openai:${agentscopeVersion}"
+
+    // ---------------- 工具 ----------------
+    compileOnly "org.projectlombok:lombok"
+    annotationProcessor "org.projectlombok:lombok"
+
+    // ---------------- 测试 ----------------
+    testImplementation "org.springframework.boot:spring-boot-starter-test"
+    testCompileOnly "org.projectlombok:lombok"
+    testAnnotationProcessor "org.projectlombok:lombok"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+// 源码含中文注释与提示词，显式指定 UTF-8
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+}
+
+tasks.test {
+    useJUnitPlatform()
+    systemProperty "file.encoding", "UTF-8"
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+
+// ./gradlew bootRun                       启动 HTTP 服务
+// ./gradlew askText2Sql -Pquestion="..."  命令行模式跑一次问答
+// 打成一个可执行 jar 时以 MVC 版为主
+springBoot {
+    mainClass = "com.ll.agent.text2sql.Text2SqlApplication"
+}
+
+tasks.named("bootRun") {
+    systemProperty "file.encoding", "UTF-8"
+    if (project.hasProperty("question")) {
+        args = ["--t2sql.cli.question=${project.property("question")}"]
+    }
+}
+
+// ./gradlew bootRunWebflux   启动 WebFlux 版（响应式 SSE，默认 8081）
+tasks.register("bootRunWebflux", org.springframework.boot.gradle.tasks.run.BootRun) {
+    group = "application"
+    description = "启动 WebFlux 版 Text2SQL（响应式 SSE，默认 http://127.0.0.1:8081）"
+    mainClass = "com.ll.agent.text2sql.webflux.WebFluxApplication"
+    classpath = sourceSets.main.runtimeClasspath
+    systemProperty "file.encoding", "UTF-8"
+}
+
+tasks.register("runText2Sql") {
+    group = "application"
+    description = "启动 Text2SQL Demo（等价于 bootRun，默认 http://127.0.0.1:8080）"
+    dependsOn("bootRun")
+}
+
+tasks.register("askText2Sql") {
+    group = "application"
+    description = "命令行执行一次 Text2SQL 问答（需要 -Pquestion=你的问题）"
+    dependsOn("bootRun")
+}

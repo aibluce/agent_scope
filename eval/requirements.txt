@@ -1,0 +1,13 @@
+# Text2SQL 评估工具依赖（Python >= 3.9，实测 3.12）
+# 安装：
+#   python3.12 -m venv eval/.venv
+#   SSL_CERT_FILE=/etc/ssl/cert.pem eval/.venv/bin/pip install -r eval/requirements.txt
+ragas[all]==0.4.3
+# ragas 0.4.3 与 langchain-community>=0.4 不兼容（新版本移除了 chat_models.vertexai），
+# 必须把 langchain 栈固定在 0.3.x，否则 import ragas 直接报 ModuleNotFoundError
+langchain<1
+langchain-core<1
+langchain-community<0.4
+langchain-openai<1
+pymysql>=1.1
+openai>=1.0

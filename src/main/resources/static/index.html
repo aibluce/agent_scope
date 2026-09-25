@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Text2SQL Demo · Spring Boot + MyBatis-Plus + AgentScope</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:#0f1419; color:#e6edf3;
+         font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#8b949e; font-size:13px; margin-bottom:20px; line-height:1.7; }
+  .card { background:#161b22; border:1px solid #30363d; border-radius:10px;
+          padding:16px; margin-bottom:16px; }
+  textarea { width:100%; height:76px; background:#0d1117; color:#e6edf3;
+             border:1px solid #30363d; border-radius:8px; padding:10px; font-size:14px;
+             resize:vertical; }
+  button { background:#238636; color:#fff; border:0; border-radius:8px;
+           padding:9px 18px; font-size:14px; cursor:pointer; }
+  button.ghost { background:#21262d; border:1px solid #30363d; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .chips button { font-size:12px; padding:5px 10px; }
+  pre { background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px;
+        overflow:auto; font-size:13px; line-height:1.5; margin:6px 0 0;
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #progress { max-height:150px; color:#8b949e; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { border:1px solid #30363d; padding:6px 10px; text-align:left; }
+  th { background:#1f2630; position:sticky; top:0; }
+  .scroll { max-height:380px; overflow:auto; border-radius:8px; margin-top:6px; }
+  .meta { color:#8b949e; font-size:12px; }
+  .err { color:#f85149; white-space:pre-wrap; }
+  .answer { white-space:pre-wrap; line-height:1.7; min-height:20px; }
+  .tag { display:inline-block; background:#1f6feb33; color:#79c0ff; border-radius:6px;
+         padding:2px 8px; font-size:12px; margin-right:6px; }
+  .tag.sse { background:#23863633; color:#7ee787; }
+  .live { color:#7ee787; }
+</style>
+</head>
+<body>
+<h1>Text2SQL Demo <span class="tag">Spring Boot</span><span class="tag">Spring MVC</span>
+  <span class="tag">MyBatis-Plus</span><span class="tag">AgentScope</span>
+  <span class="tag sse">SSE 流式</span></h1>
+<div class="sub">在下面输入你的问题（自然语言），接口会实时推送「表结构检索 → SQL 生成 → 查询 → 结论」全过程。<br/>
+只支持查询电商业务数据（订单 / 订单明细 / 用户 / 商品 / 省份），其他指令会被拒绝。</div>
+
+<div class="card">
+  <textarea id="q" placeholder="请输入你的问题，例如：查询 2026 年各省份的销售额排名，取前 5 名"></textarea>
+  <div class="row chips">
+    <button class="ghost" onclick="fill(this)">2026 年各省份销售额排名 Top5</button>
+    <button class="ghost" onclick="fill(this)">最近 30 天各下单渠道的订单量和实付金额</button>
+    <button class="ghost" onclick="fill(this)">各商品类目的销售额和销量排名</button>
+    <button class="ghost" onclick="fill(this)">销量最高的 10 款商品及其类目</button>
+    <button class="ghost" onclick="fill(this)">钻石会员的客单价和人数</button>
+    <button class="ghost" onclick="fill(this)">订单量最多的 10 个用户及其所在省份</button>
+  </div>
+  <div class="row">
+    <button id="go" onclick="ask()">流式查询（SSE）</button>
+    <span class="meta" id="status"></span>
+  </div>
+</div>
+
+<div class="card" id="resultCard" style="display:none">
+  <div id="answer" class="answer"></div>
+  <div class="meta" id="meta" style="margin:10px 0"></div>
+
+  <div class="meta">执行进度（实时）</div>
+  <pre id="progress"></pre>
+
+  <div class="meta" style="margin-top:12px">执行的 SQL</div>
+  <pre id="sql"></pre>
+  <div id="tableWrap" class="scroll"></div>
+
+  <div class="meta" style="margin-top:14px">链路耗时</div>
+  <pre id="steps"></pre>
+</div>
+
+<script>
+let progressLines = [];
+let currentStage = '';
+
+function fill(btn) { document.getElementById('q').value = btn.textContent; }
+
+function resetUI() {
+  progressLines = [];
+  currentStage = '';
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('answer').textContent = '';
+  document.getElementById('meta').textContent = '';
+  document.getElementById('progress').textContent = '';
+  document.getElementById('sql').textContent = '';
+  document.getElementById('steps').textContent = '';
+  document.getElementById('tableWrap').innerHTML = '';
+}
+
+function pushProgress(line) {
+  progressLines.push(line);
+  if (progressLines.length > 40) { progressLines = progressLines.slice(-40); }
+  const box = document.getElementById('progress');
+  box.textContent = progressLines.join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function ask() {
+  const question = document.getElementById('q').value.trim();
+  if (!question) { return; }
+  const go = document.getElementById('go');
+  go.disabled = true;
+  resetUI();
+  document.getElementById('status').innerHTML = '<span class="live">● 流式输出中 ...</span>';
+  const started = Date.now();
+  try {
+    const resp = await fetch('/api/text2sql/ask/stream?question=' + encodeURIComponent(question));
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      if (data.rejected) { renderRejected(data); document.getElementById('status').textContent = '已拒绝'; return; }
+      throw new Error(data.error || ('HTTP ' + resp.status));
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) { break; }
+      buffer += decoder.decode(chunk.value, {stream: true});
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        handleFrame(buffer.slice(0, idx));
+        buffer = buffer.slice(idx + 2);
+      }
+    }
+    document.getElementById('status').innerHTML =
+      '<span class="live">完成</span> <span class="meta">共 ' + (Date.now() - started) + ' ms</span>';
+  } catch (e) {
+    document.getElementById('status').innerHTML = '<span class="err">调用失败：' + e.message + '</span>';
+  } finally {
+    go.disabled = false;
+  }
+}
+
+function handleFrame(frame) {
+  let event = 'message';
+  const dataLines = [];
+  frame.split('\n').forEach(function (line) {
+    if (line.startsWith('event:')) { event = line.slice(6).trim(); }
+    else if (line.startsWith('data:')) { dataLines.push(line.slice(5).replace(/^ /, '')); }
+  });
+  if (dataLines.length === 0) { return; }
+  let data;
+  try { data = JSON.parse(dataLines.join('\n')); } catch (e) { return; }
+  dispatch(event, data);
+}
+
+function dispatch(event, data) {
+  switch (event) {
+    case 'meta':
+      document.getElementById('meta').textContent = 'requestId=' + data.requestId + '  会话=' + data.sessionId;
+      pushProgress('[开始] ' + data.question);
+      break;
+    case 'stage':
+      if (data.status === 'start') {
+        currentStage = data.stage;
+        pushProgress('▶ ' + data.stage);
+      } else {
+        pushProgress('  ✓ ' + data.stage + ' (' + data.elapsedMs + ' ms)');
+      }
+      break;
+    case 'tool':
+      pushProgress('    ⚙ 调用工具 ' + data.tool);
+      break;
+    case 'delta':
+      if (data.stage && data.stage.indexOf('analyst') >= 0) {
+        document.getElementById('answer').textContent += data.text;
+      }
+      break;
+    case 'sql':
+      document.getElementById('sql').textContent = data.sql;
+      pushProgress('  ✓ SQL 已通过安全网关并执行');
+      break;
+    case 'rows':
+      renderRows(data);
+      pushProgress('  ✓ 返回 ' + data.rowCount + ' 行' + (data.truncated ? '（已截断）' : ''));
+      break;
+    case 'done':
+      renderDone(data);
+      break;
+    case 'rejected':
+      renderRejected(data);
+      break;
+    case 'error':
+      document.getElementById('answer').innerHTML =
+        '<span class="err">' + escapeHtml(data.error || '执行失败') + '</span>';
+      break;
+    default:
+      break;
+  }
+}
+
+function renderRejected(data) {
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('answer').innerHTML =
+    '<span style="color:#f0883e;font-weight:600">' + escapeHtml(data.error) + '</span>' +
+    (data.category ? '\n\n拒绝类别：' + escapeHtml(data.category) : '') +
+    '\n\n可以这样提问：\n' + (data.examples || []).map(function (e) { return '  · ' + e; }).join('\n');
+  document.getElementById('meta').textContent = '已拒绝：未调用大模型，也未查询数据库';
+  document.getElementById('sql').textContent = '(无)';
+  document.getElementById('tableWrap').innerHTML = '';
+  document.getElementById('steps').textContent = '';
+}
+
+function renderDone(data) {
+  document.getElementById('meta').textContent =
+    'requestId=' + (data.requestId || '-') + '  行数=' + data.rowCount +
+    (data.truncated ? '(已截断)' : '') + '  纠错次数=' + data.repairAttempts +
+    '  总耗时=' + data.elapsedMs + 'ms';
+  document.getElementById('steps').textContent =
+    (data.steps || []).map(function (s) { return s.elapsedMs + ' ms  ' + s.stage; }).join('\n');
+  if (data.sql) { document.getElementById('sql').textContent = data.sql; }
+}
+
+function renderRows(data) {
+  const wrap = document.getElementById('tableWrap');
+  if (!data.rows || data.rows.length === 0) {
+    wrap.innerHTML = '<div class="meta">查询结果为空</div>';
+    return;
+  }
+  let html = '<table><thead><tr>';
+  data.columns.forEach(function (c) { html += '<th>' + escapeHtml(c) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  data.rows.forEach(function (row) {
+    html += '<tr>';
+    data.columns.forEach(function (c) { html += '<td>' + escapeHtml(row[c]) + '</td>'; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function escapeHtml(v) {
+  if (v === null || v === undefined) { return '<span class="meta">NULL</span>'; }
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>

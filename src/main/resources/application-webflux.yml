@@ -1,0 +1,15 @@
+# ============================================================================
+# WebFlux 版（响应式 SSE）专用配置：以 webflux profile 激活
+# 启动： ./gradlew bootRunWebflux     →  http://127.0.0.1:8081
+# ============================================================================
+server:
+  # 与 MVC 版(8080)并存，避免抢端口
+  port: 8081
+  netty:
+    # 事件循环线程数：默认 = CPU 核数 * 2，演示环境显式给个小值便于观察
+    connection-timeout: 30s
+
+spring:
+  main:
+    # classpath 上同时有 starter-web 与 starter-webflux，这里显式走响应式
+    web-application-type: reactive

@@ -1,0 +1,101 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: text2sql-demo
+  # 用户输入的请求体限制（提示词可能较长）
+  mvc:
+    problemdetails:
+      enabled: false
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/ecommerce?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&zeroDateTimeBehavior=convertToNull
+    username: root
+    password: Atguigu.123
+    hikari:
+      pool-name: text2sql-pool
+      maximum-pool-size: 8
+      minimum-idle: 1
+      connection-timeout: 10000
+      # 只读连接池：从连接层杜绝写操作（业务库只允许 SELECT）
+      read-only: true
+
+mybatis-plus:
+  configuration:
+    # 保留 SQL 里的原始列名/别名（Text2SQL 结果直接以模型写的中文别名返回，不做驼峰转换）
+    map-underscore-to-camel-case: false
+    # 单条 SQL 的执行超时（秒），防止大模型生成慢查询拖垮数据库
+    default-statement-timeout: 30
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+# ============================================================================
+# Text2SQL Demo 业务配置（环境变量可覆盖：t2sql.llm.api-key -> T2SQL_LLM_API_KEY）
+# ============================================================================
+t2sql:
+  llm:
+    # 任何兼容 OpenAI 协议的服务：DeepSeek / 通义千问兼容模式 / vLLM / Ollama
+    base-url: https://api.deepseek.com
+    model: deepseek-flash
+    # 生产环境请改用环境变量 DEEPSEEK_API_KEY 或 T2SQL_LLM_API_KEY
+    api-key:
+  sql:
+    max-rows: 200
+    # 只允许查询这些表（安全网关的白名单）
+    allowed-tables:
+      - t_province
+      - t_user
+      - t_product
+      - t_order
+      - t_order_item
+  agent:
+    max-iters: 6
+    timeout-seconds: 120
+    # SQL 执行失败后自动纠错轮数
+    repair-rounds: 1
+    # 结果为空时是否让智能体放宽条件重试
+    retry-on-empty: true
+  # 提示词增强：业务口径字典（相当于轻量语义层），会拼进智能体的系统提示词
+  prompt:
+    few-shot: true
+    business-rules:
+      - "订单量 / 订单数 / 复购用户：一律按全部订单统计，不要加订单状态过滤。"
+      - "商品销量、销售额、成交额、客单价、毛利率等经营指标属于「成交口径」：必须过滤 order_status IN (2,3,4)。"
+      - "涉及具体实体（用户 / 商品 / 省份）时输出名称类字段（username、product_name、province_name），不要只给 ID 或编码。"
+      - "只有问题明确提到「成交额 / 销售额 / 收入 / 有效订单」时，才用 order_status IN (2,3,4) 过滤；问题没提就不要加。"
+      - "问题里已经写明口径（例如括号中的说明）时，严格按问题给的口径，不要自行更改或补充。"
+      - "金额字段：订单口径用 t_order.pay_amount；商品/明细口径用 t_order_item.item_amount。"
+      - "商品销量用 t_order_item.quantity 汇总，不要用 t_product.sales_count（那是冗余统计字段，只在问题明确问它时使用）。"
+      - "时间字段：下单时间用 t_order.create_time，支付时间用 t_order.pay_time（未支付订单为 NULL）。"
+      - "枚举字段（order_status / gender / member_level / status）直接输出数据库原值（如 1、2、4），除非问题明确要求可读名称。"
+      - "金额、百分比等指标统一 ROUND(..., 2)，百分比用 0~100 的数值形式。"
+  schema:
+    cache-seconds: 60
+  # 入口意图闸门：只允许查询类问题，非查询指令直接提示「不支持其他指令」
+  guard:
+    enabled: true
+    # 规则层之外再用大模型复核意图（更准；关掉可省一次模型调用）
+    intent-check: true
+    max-question-length: 500
+  cli:
+    # 非空时进入命令行模式：跑一次问答后退出（不启动 Web 服务）
+    question: ""
+
+logging:
+  level:
+    root: info
+    com.ll.agent: info
+    # 框架内部日志较多，只看告警
+    io.agentscope: warn
+    org.springframework: warn
+    com.zaxxer.hikari: info
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level %logger{24} - %msg%n"
